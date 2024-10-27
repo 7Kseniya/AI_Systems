@@ -1,97 +1,134 @@
 import re
 from pyswip import Prolog
+
+class Colors:
+    RESET = "\033[0m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    MAGENTA = "\033[35m"
+    CYAN = "\033[36m"
+
+# Initialize Prolog
 prolog = Prolog()
-prolog.consult("./prolog/lab1/chess_facts.pl")
-prolog.consult("./prolog/lab1/chess_rules.pl")
 
-usage_example = str('I am a beginner who knows the rules and wants fast game')
-def get_user_input():
-    user_input = input(f" Enter your preferences. For example: '{usage_example}'")
-    if user_input:
-        return user_input
-    else: 
-        print("Input cannot be empty. Please try again" )
+# Load the knowledge base from a file
+prolog.consult("../lab1/chess_facts.pl") 
 
-def parse_input(user_input):
-    difficulty = None
-    rules_known = None
-    fast_game = None
+# Define patterns for matching user input
+difficulty_pattern = r'(beginner|novice|easy|simple|intermediate|medium|average|advanced|hard|expert)'
+rules_known_pattern = r'(know the rules|knows the rules|understand the rules|familiar with the rules|do not know the rules|does not know the rules|unfamiliar with the rules)'
+fast_game_pattern = r'(fast|quick|short|blitz)'
 
-    difficulty_pattern = r'(beginner|novice|easy|simple|intermediate|medium|average|advanced|hard|expert)'
-    rules_known_pattern = r'(know the rules|knows the rules|understand the rules|familiar with the rules|do not know the rules|does not know the rules|unfamiliar with the rules)'
-    fast_game_pattern = r'(fast|quick|short|blitz|)'
-
-    difficulty_match = re.search(difficulty_pattern, user_input, re.IGNORECASE)
-    rules_known_match = re.search(rules_known_pattern, user_input, re.IGNORECASE)
-    fast_game_match = re.search(fast_game_pattern, user_input, re.IGNORECASE)
-
+def get_game_mode_and_time(preference):
+    query_mode = f"game_mode({preference})"
+    query_time = f"game_time({preference}, Time)"
     
-    if difficulty_match:
-        difficulty = difficulty_match.group(0).lower()
-        if difficulty in ['beginner', 'notice', 'easy', 'simple']:
-            difficulty = 'easy'
-        elif difficulty in ['intermediate', 'medium', 'avarage']:
-            difficulty = 'medium'
-        else:
-            difficulty = 'hard'
-    else:
-        print("Invalid difficulty level. Please specify: \nbeginner\nintermediate\nadvanced'")
-    
-    if rules_known_match:
-        rules_known = 'know' in rules_known_match.group(0).lower()
-    else:
-        print("Invalid input. Please specify whether you know the rules or not")
-    
-    if fast_game_match:
-        fast_game = True
-    else:
-        fast_game = False
-        
-    return str(difficulty), str(rules_known), str(fast_game)
-
-def get_recommendation(difficulty, rules_known, fast_game):
-    game_mode = None
-    if fast_game:
-        game_mode = ['blitz', 'fast_chess']
-    else:
-        game_mode = 'classic'
-    query = f'game_mode(Mode), Mode = {game_mode[0]}, Difficulty = {difficulty}, Rules = {rules_known}, write(', '), write(Difficulty), nl, fail.'
-    results = list(prolog.query(query=query))
-    if results:
-        recommended_game_mode = results[0]["Mode"]
-        recommended_difficulty = results[0]["Difficulty"]
-        return recommended_game_mode, recommended_difficulty
-    else:
+    try:
+        modes = list(prolog.query(query_mode))
+        times = list(prolog.query(query_time))
+    except Exception as e:
+        print(f"{Colors.RED}Error querying Prolog: {e}{Colors.RESET}")
         return None, None
     
-def print_rules():
-    query = "rule(Name, Description), write(Name), write(': '), write(Description), nl, fail."
-    print("Chess rules:")
-    results = list(prolog.query(query=query))
-    for result in results:
-        print(f'{result['Name']}: {result['Description']}')
+    if modes and times:
+        return preference, times[0]['Time']
+    else:
+        return None, None
+
+def get_rules():
+    try:
+        rules = list(prolog.query("rule(Name, Description)"))
+    except Exception as e:
+        print(f"{Colors.RED}Error querying Prolog: {e} {Colors.RESET}")
+        return {}
+    
+    return {rule['Name']: rule['Description'] for rule in rules}
+
+def parse_user_input(user_input):
+    """Parse the user input to extract game mode, difficulty, and rules familiarity."""
+    knows_rules = True  # Default to true if no specific mention
+
+    # Check for rule familiarity
+    rules_known_match = re.search(rules_known_pattern, user_input)
+    if rules_known_match:
+        knows_rules = 'know' in rules_known_match.group(0).lower()
+    else:
+        rules_response = input(f"{Colors.MAGENTA}Do you know the rules?{Colors.RESET} (yes/no): ").strip().lower()
+        knows_rules = rules_response == 'yes'
+
+    # Check for game mode and difficulty
+    mode_match = re.search(fast_game_pattern, user_input)
+    difficulty_match = re.search(difficulty_pattern, user_input)
+
+    return mode_match, difficulty_match, knows_rules
+
+def normalize_difficulty(difficulty_match):
+    """Normalize difficulty levels based on user input."""
+    if difficulty_match:
+        difficulty = difficulty_match.group(0).lower()
+        if difficulty in ['beginner', 'novice', 'easy', 'simple']:
+            return 'easy'
+        elif difficulty in ['intermediate', 'medium', 'average']:
+            return 'medium'
+        else:
+            return 'hard'
+    else:
+        difficulty_input = input(f"{Colors.MAGENTA}Please specify your difficulty level {Colors.RESET}(beginner, intermediate, advanced): ")
+        return normalize_difficulty(re.search(difficulty_pattern, difficulty_input))
+
+def get_user_input():
+    """Get input from the user with a usage example."""
+    usage_example = "blitz easy or I do not know the rules"
+    user_input = input(f"{Colors.MAGENTA}Enter your preferences. For example:{Colors.RESET} '{usage_example}': ").strip().lower()
+    
+    if user_input:
+        return user_input
+    else:
+        print(f"{Colors.RED}Input cannot be empty. Please try again.{Colors.RESET}")
+        return get_user_input()
+
+def determine_game_mode(mode_match):
+    """Determine the game mode based on user input."""
+    if mode_match:
+        mode_preference = mode_match.group(0)
+        if mode_preference in ['fast', 'quick', 'short']:
+            return 'fast_chess'
+        elif mode_preference =='blitz':
+            return 'blitz'
+        else:
+            return 'classic'
+    else:
+        return 'classic'
 
 if __name__ == "__main__":
-    user_input = get_user_input()
-    difficulty, rules_known, fast_game = parse_input(user_input=user_input)
-    if difficulty == 'easy':
-        remind_rules = input("Do you want us to remind you the rules? (yes/no): ")
-        if remind_rules.lower() == 'yes':
-            print_rules()
-        else:
-            rules_known = False
-    elif rules_known is None:
-        rules_known = input("Do you know the rules? (yes/no): ")
-        rules_known = rules_known.lower() == 'yes'
+    print(f"{Colors.CYAN}Welcome to the chess game recommendation system!{Colors.RESET}")
 
-    if difficulty and rules_known and fast_game is not None and fast_game is not None:
-        recommended_game_mode, recommended_difficulty = get_recommendation(difficulty, rules_known, fast_game)
+    while True:
+        user_input = get_user_input()
+        mode_match, difficulty_match, knows_rules = parse_user_input(user_input)
+        game_mode = determine_game_mode(mode_match)
+        mode, time = get_game_mode_and_time(game_mode)
 
-        if recommended_game_mode and recommended_difficulty:
-            print(f"Based on your preferences, we recommend the following game mode: {recommended_game_mode}")
-            print(f"We also recommend the following difficulty level: {recommended_difficulty}")
+        if mode and time:
+            print(f"Recommended game mode: {Colors.CYAN}{mode.capitalize()}{Colors.RESET}, duration: {Colors.CYAN}{time}{Colors.RESET} minutes.")
         else:
-            print("No recommendations found based on your preferences.")
-    else:
-        print("Invalid input. Please specify your difficulty level, whether you know the rules, and whether you want a fast game.")
-    
+            print(f"{Colors.RED}Sorry, that game mode was not found.{Colors.RESET}")
+
+        difficulty = normalize_difficulty(difficulty_match)
+
+        print(f"Recommended difficulty level: {Colors.CYAN}{difficulty.capitalize()}{Colors.RESET}.")
+
+        # Provide rules if the user does not know them
+        if not knows_rules:
+            print(f"{Colors.MAGENTA}Would you like to know the rules of the game?{Colors.RESET}")
+            show_rules = input(f"{Colors.MAGENTA}Enter 'yes' to view the rules: {Colors.RESET}").strip().lower()
+            if show_rules == 'yes':
+                rules = get_rules()
+                for rule, description in rules.items():
+                    print(f"{rule}: {description}")
+
+        # Ask the user if they want to continue
+        continue_input = input(f"{Colors.MAGENTA}Do you want to continue?{Colors.RESET}(yes/no): ").strip().lower()
+        if continue_input != 'yes':
+            print(f"{Colors.CYAN}Thank you for using the chess game recommendation system! Goodbye!{Colors.RESET}")
+            break
