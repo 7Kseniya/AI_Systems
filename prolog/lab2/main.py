@@ -1,12 +1,6 @@
 import re
 from pyswip import Prolog
-
-class Colors:
-    RESET = "\033[0m"
-    RED = "\033[31m"
-    GREEN = "\033[32m"
-    MAGENTA = "\033[35m"
-    CYAN = "\033[36m"
+from colors import Colors
 
 # Initialize Prolog
 prolog = Prolog()
@@ -78,7 +72,7 @@ def normalize_difficulty(difficulty_match):
 
 def get_user_input():
     """Get input from the user with a usage example."""
-    usage_example = "blitz easy or I do not know the rules"
+    usage_example = "blitz easy or classic hard"
     user_input = input(f"{Colors.MAGENTA}Enter your preferences. For example:{Colors.RESET} '{usage_example}': ").strip().lower()
     
     if user_input:
