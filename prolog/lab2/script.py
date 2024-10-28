@@ -1,5 +1,7 @@
+import random
 import re
 from pyswip import Prolog
+import chess
 from colors import Colors
 
 # Initialize Prolog
@@ -11,7 +13,7 @@ prolog.consult("../lab1/chess_facts.pl")
 # Define patterns for matching user input
 difficulty_pattern = r'(beginner|novice|easy|simple|intermediate|medium|average|advanced|hard|expert)'
 rules_known_pattern = r'(know the rules|knows the rules|understand the rules|familiar with the rules|do not know the rules|does not know the rules|unfamiliar with the rules)'
-fast_game_pattern = r'(fast|quick|short|blitz)'
+game_mode_pattern = r'(fast|quick|short|blitz|classic)'
 
 def get_game_mode_and_time(preference):
     query_mode = f"game_mode({preference})"
@@ -56,7 +58,7 @@ def parse_user_input(user_input):
                 print(f"{Colors.RED}Invalid input. Please enter 'yes' or 'no'.{Colors.RESET}")
 
     # Check for game mode and difficulty
-    mode_match = re.search(fast_game_pattern, user_input)
+    mode_match = re.search(game_mode_pattern, user_input)
     difficulty_match = re.search(difficulty_pattern, user_input)
 
     return mode_match, difficulty_match, knows_rules
@@ -97,19 +99,34 @@ def determine_game_mode(mode_match):
         mode_preference = mode_match.group(0)
         if mode_preference in ['fast', 'quick', 'short']:
             return 'fast_chess'
-        elif mode_preference == 'blitz':
-            return 'blitz'
         else:
-            return ' classic'
+            return str(mode_preference)
     else:
         while True:
             mode_input = input(f"{Colors.MAGENTA}Please specify your mode preference {Colors.RESET}(blitz, fast chess, classic): ")
-            mode_match = re.search(fast_game_pattern, mode_input)
+            mode_match = re.search(game_mode_pattern, mode_input)
             if mode_match:
                 return determine_game_mode(mode_match)
             else:
                 print(f"{Colors.RED}Invalid input. Please enter a valid game mode.{Colors.RESET}")
 
+def get_recommended_move(fen_position):
+    # Creating a chessboard from a FEN string
+    board = chess.Board(fen_position)
+    
+    # Get all possible moves for the current position
+    legal_moves = list(board.legal_moves)
+    
+    if not legal_moves:
+        return "No moves available. The game is over."
+    
+    move = legal_moves[random.choice([0, 1, 2, 3, 4])]
+    
+    # Get the start and end squares in coordinate format
+    start_square = chess.square_name(move.from_square)
+    end_square = chess.square_name(move.to_square)
+    
+    return f"Recommended move: {start_square} -> {end_square}"
 
 if __name__ == "__main__":
     print(f"{Colors.CYAN}Welcome to the chess game recommendation system!{Colors.RESET}")
@@ -142,6 +159,29 @@ if __name__ == "__main__":
         difficulty = normalize_difficulty(difficulty_match)
 
         print(f"Recommended difficulty level: {Colors.CYAN}{difficulty.capitalize()}{Colors.RESET}.")
+
+        # Generate a random FEN position for the game
+        player_color_pos = random.choice(['w', 'b'])
+        fen_position = f"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR {player_color_pos} KQkq - 0 1"
+        
+        if player_color_pos =='w':
+            player_color = 'white'
+        else: player_color = 'black'
+        
+        if difficulty == 'easy':
+            # print(f"{Colors.CYAN}Here's your starting position: {Colors.RESET}{fen_position}")
+            print(f"{Colors.CYAN}You are playing as {player_color}.{Colors.RESET}")
+
+            while True:
+                ask_for_move = input(f"{Colors.MAGENTA}Would you like a recommended move?{Colors.RESET} (yes/no): ").strip().lower()
+                if ask_for_move == 'yes':
+                    recommended_move = get_recommended_move(fen_position)
+                    print(f"{Colors.CYAN}{recommended_move}{Colors.RESET}")
+                    break
+                elif ask_for_move == 'no':
+                    break
+                else:
+                    print(f"{Colors.RED}Invalid input. Please enter 'yes' or 'no'.{Colors.RESET}")
 
         # Ask the user if they want to continue
         while True:
